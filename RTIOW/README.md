@@ -13,7 +13,7 @@ This project generates a simple gradient image using C++ and outputs it in PPM f
 
 1. Navigate to the project directory:
    ```powershell
-   cd "c:\Users\lukej\Documents\Capstone\RTIOW"
+   cd "\Capstone\RTIOW"
    ```
 
 2. Create and navigate to build directory:
