@@ -5,10 +5,11 @@
 
 #include "hittable.h"
 
+
 class camera {
   public:
     double aspect_ratio = 1.0;  // Ratio of image width over height
-    int    image_width  = 100;  // Rendered image width in pixel count
+    int    image_width  = 1280;  // Rendered image width in pixel count
 
     void render(const hittable& world) {
         initialize();
