@@ -5,6 +5,10 @@
 
 #include "hittable.h"
 #include "material.h"
+#include <thread>
+#include <vector>
+#include <mutex>
+#include <atomic>
 
 
 class camera {
@@ -26,6 +30,10 @@ class camera {
 
 
     void render(const hittable& world) {
+        render_multithreaded(world);
+    }
+
+    void render_single_threaded(const hittable& world) {
         initialize();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
@@ -37,10 +45,66 @@ class camera {
                 for (int sample = 0;  sample < samples_per_pixel; sample++) {
                     ray r = get_ray(i,j);
                     pixel_color += ray_color(r, max_depth, world);
-
-
                 }
                 write_color(std::cout, pixel_samples_scale * pixel_color);
+            }
+        }
+
+        std::clog << "\rDone.                 \n";
+    }
+
+    void render_multithreaded(const hittable& world) {
+        initialize();
+
+        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+
+        // Create a buffer to store all pixel colors
+        std::vector<color> pixel_buffer(image_width * image_height);
+        
+        // Determine the number of threads to use
+        const int num_threads = std::thread::hardware_concurrency();
+        std::clog << "Using " << num_threads << " threads for rendering.\n";
+        
+        // Atomic counter for work distribution and progress reporting
+        std::atomic<int> next_row{0};
+        std::atomic<int> completed_lines{0};
+        
+        // Create worker threads
+        std::vector<std::thread> threads;
+        
+        for (int thread_id = 0; thread_id < num_threads; ++thread_id) {
+            threads.emplace_back([&, thread_id]() {
+                int j;
+                while ((j = next_row.fetch_add(1)) < image_height) {
+                    // Process entire row
+                    for (int i = 0; i < image_width; i++) {
+                        color pixel_color(0,0,0);
+                        for (int sample = 0; sample < samples_per_pixel; sample++) {
+                            ray r = get_ray(i, j);
+                            pixel_color += ray_color(r, max_depth, world);
+                        }
+                        pixel_buffer[j * image_width + i] = pixel_samples_scale * pixel_color;
+                    }
+                    
+                    // Update progress (thread-safe)
+                    int current_completed = completed_lines.fetch_add(1) + 1;
+                    if (thread_id == 0 && current_completed % 10 == 0) { // Update every 10 lines
+                        std::clog << "\rScanlines remaining: " << (image_height - current_completed) 
+                                  << ' ' << std::flush;
+                    }
+                }
+            });
+        }
+        
+        // Wait for all threads to complete
+        for (auto& thread : threads) {
+            thread.join();
+        }
+        
+        // Output the rendered image
+        for (int j = 0; j < image_height; j++) {
+            for (int i = 0; i < image_width; i++) {
+                write_color(std::cout, pixel_buffer[j * image_width + i]);
             }
         }
 

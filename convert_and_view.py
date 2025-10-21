@@ -3,17 +3,27 @@ import struct
 import zlib
 
 def read_ppm(file_path):
-    with open(file_path, 'r') as f:
-        header = f.readline().strip()
+    with open(file_path, 'rb') as f:
+        # Read the first line and handle BOM
+        first_line = f.readline()
+        # Remove BOM if present
+        if first_line.startswith(b'\xff\xfe'):  # UTF-16 LE BOM
+            first_line = first_line[2:]
+        elif first_line.startswith(b'\xfe\xff'):  # UTF-16 BE BOM
+            first_line = first_line[2:]
+        elif first_line.startswith(b'\xef\xbb\xbf'):  # UTF-8 BOM
+            first_line = first_line[3:]
+        
+        header = first_line.decode().strip()
         if header not in ('P3', 'P6'):
             raise ValueError('Unsupported PPM format: ' + header)
 
-        dimensions = f.readline().strip()
+        dimensions = f.readline().decode().strip()
         while dimensions.startswith('#'):
-            dimensions = f.readline().strip()
+            dimensions = f.readline().decode().strip()
         width, height = map(int, dimensions.split())
 
-        max_val = int(f.readline().strip())
+        max_val = int(f.readline().decode().strip())
         if max_val != 255:
             raise ValueError('Unsupported max value: ' + str(max_val))
 
@@ -21,12 +31,14 @@ def read_ppm(file_path):
             # ASCII format
             pixel_data = []
             for line in f:
-                if line.startswith('#'):
+                line_str = line.decode().strip()
+                if line_str.startswith('#'):
                     continue
-                pixel_data.extend(map(int, line.split()))
+                if line_str:  # Skip empty lines
+                    pixel_data.extend(map(int, line_str.split()))
             pixel_data = bytes(pixel_data)
         else:
-            # Binary format
+            # Binary format (P6)
             pixel_data = f.read()
 
         return width, height, pixel_data

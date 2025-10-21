@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <thread>
 
 #include "camera.h"
 #include "hittable.h"
@@ -45,10 +46,10 @@ int main() {
         }
     }
 
-    auto material1 = make_shared<dielectric>(1.5);
+    auto material1 = make_shared<metal>(color(0.7, 0.3, 0.0), 0.1);
     world.add(make_shared<sphere>(point3(0, 1, 0), 1.0, material1));
 
-    auto material2 = make_shared<lambertian>(color(0.4, 0.2, 0.1));
+    auto material2 = make_shared<metal>(color(0.4, 0.2, 0.1), 0.2);
     world.add(make_shared<sphere>(point3(-4, 1, 0), 1.0, material2));
 
     auto material3 = make_shared<metal>(color(0.7, 0.6, 0.5), 0.0);
@@ -57,8 +58,8 @@ int main() {
     camera cam;
 
     cam.aspect_ratio      = 16.0 / 9.0;
-    cam.image_width       = 1200;
-    cam.samples_per_pixel = 500;
+    cam.image_width       = 720;
+    cam.samples_per_pixel = 1000;
     cam.max_depth         = 50;
 
     cam.vfov     = 20;
@@ -75,11 +76,10 @@ int main() {
     // Start timing
     auto start_time = std::chrono::high_resolution_clock::now();
 
-
-    //Main render call
+    // Main render call (multithreaded by default)
+    // To use single-threaded rendering, change the call to: cam.render_single_threaded(world);
+    std::cerr << "Starting multithreaded rendering...\n";
     cam.render(world); 
-    
-
 
     // Stop timing and calculate elapsed time
     auto end_time = std::chrono::high_resolution_clock::now();
