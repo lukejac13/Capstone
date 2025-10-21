@@ -13,7 +13,7 @@ This project generates a simple gradient image using C++ and outputs it in PPM f
 
 1. Navigate to the project directory:
    ```powershell
-   cd "\Capstone\RTIOW"
+   cd "Capstone\RTIOW"
    ```
 
 2. Create and navigate to build directory:
@@ -32,25 +32,20 @@ This project generates a simple gradient image using C++ and outputs it in PPM f
    cmake --build . --config Release
    ```
 
-### Option 2: Using the provided scripts
-
-From the `build` directory, run:
-```powershell
-# PowerShell script
-.\build_and_run.ps1
-
-# Or batch script
-.\build_and_run.bat
-```
-
 ## Running the Program
 
 After building, the executable will be located at `build/bin/Release/rtiow.exe`.
 
 To generate an image:
 ```powershell
-.\bin\Release\rtiow.exe > image.ppm
+.\bin\rtiow.exe > image.ppm
 ```
+## Viewing the Image
+
+After generating the image, you can view it using the command
+
+```powershell
+cd "..\..\python convert_and_view.py"
 
 This will create a 256x256 pixel PPM image file.
 
