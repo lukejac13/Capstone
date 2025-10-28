@@ -1,6 +1,42 @@
 # Ray Tracing in One Weekend (RTIOW)
 
-This project generates a simple gradient image using C++ and outputs it in PPM format.
+This project implements a physically-based ray tracer that generates photorealistic images using Monte Carlo sampling and the rendering equation. The program uses multithreaded CPU rendering for improved performance.
+
+## Mathematical Foundation
+
+### The Rendering Equation
+
+The core of ray tracing is based on the rendering equation, which describes how light interacts with surfaces:
+
+$$L_o(p, \omega_o) = L_e(p, \omega_o) + \int_{\Omega} f_r(p, \omega_i, \omega_o) L_i(p, \omega_i) \cos\theta_i d\omega_i$$
+
+Where:
+- $L_o(p, \omega_o)$ is the outgoing radiance at point $p$ in direction $\omega_o$
+- $L_e(p, \omega_o)$ is the emitted radiance (for light sources)
+- $f_r(p, \omega_i, \omega_o)$ is the bidirectional reflectance distribution function (BRDF)
+- $L_i(p, \omega_i)$ is the incoming radiance from direction $\omega_i$
+- $\cos\theta_i$ is the cosine of the angle between $\omega_i$ and the surface normal
+- $\Omega$ represents the hemisphere of incoming directions
+
+### Monte Carlo Integration
+
+Since the rendering equation involves an integral over all incoming directions, we use Monte Carlo integration to approximate it:
+
+$$\int_{\Omega} f(x) dx \approx \frac{1}{N} \sum_{i=1}^{N} \frac{f(x_i)}{p(x_i)}$$
+
+Where $N$ is the number of samples and $p(x_i)$ is the probability density function for sample $x_i$.
+
+### Ray-Sphere Intersection
+
+For sphere intersection testing, we solve the quadratic equation:
+
+$$t^2(\mathbf{d} \cdot \mathbf{d}) + 2t(\mathbf{d} \cdot (\mathbf{o} - \mathbf{c})) + (\mathbf{o} - \mathbf{c}) \cdot (\mathbf{o} - \mathbf{c}) - r^2 = 0$$
+
+Where:
+- $\mathbf{o}$ is the ray origin
+- $\mathbf{d}$ is the ray direction
+- $\mathbf{c}$ is the sphere center
+- $r$ is the sphere radius
 
 ## Prerequisites
 
@@ -84,9 +120,38 @@ RTIOW/
 └── README.md            # This file
 ```
 
+## Multithreading Implementation
+
+This ray tracer uses multithreaded CPU rendering for improved performance:
+
+- **Work Distribution**: Rows are distributed dynamically among threads using atomic counters
+- **Thread Safety**: Uses thread-local random number generators for proper parallel execution  
+- **Performance**: Automatically detects and utilizes all available CPU cores
+- **Progress Reporting**: Thread-safe progress updates during rendering
+
+### Performance Comparison
+
+The multithreaded implementation provides significant speedup over single-threaded rendering:
+- **Single-threaded**: Linear processing, one pixel at a time
+- **Multithreaded**: Parallel processing across all CPU cores
+
+To switch between modes, modify the render call in `main.cc`:
+```cpp
+// Multithreaded (default)
+cam.render(world);
+
+// Single-threaded (for comparison)
+cam.render_single_threaded(world);
+```
+
 ## Customization
 
-You can modify the image dimensions by changing the `image_width` and `image_height` variables in `main.cc`. Remember to rebuild after making changes.
+You can modify the rendering parameters in `main.cc`:
+- `image_width`: Output image width (affects render time)
+- `samples_per_pixel`: Number of samples per pixel (affects quality and render time)
+- `max_depth`: Maximum ray bounce depth (affects quality)
+
+Remember to rebuild after making changes.
 
 ## CMake Targets
 
