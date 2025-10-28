@@ -60,27 +60,16 @@ class camera {
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
 
-        // Create a buffer to store completed rows and track which rows are ready
-        std::vector<std::vector<color>> row_buffer(image_height);
-        std::vector<bool> row_completed(image_height, false);
-        
-        // Mutex for synchronized output and progress tracking
-        std::mutex output_mutex;
-        std::mutex progress_mutex;
+        // Create a buffer to store all pixel colors
+        std::vector<color> pixel_buffer(image_width * image_height);
         
         // Determine the number of threads to use
         const int num_threads = std::thread::hardware_concurrency();
         std::clog << "Using " << num_threads << " threads for rendering.\n";
         
-        // Atomic counters for work distribution and progress reporting
+        // Atomic counter for work distribution and progress reporting
         std::atomic<int> next_row{0};
         std::atomic<int> completed_lines{0};
-        std::atomic<int> next_output_row{0};
-        
-        // Initialize row buffers
-        for (int j = 0; j < image_height; j++) {
-            row_buffer[j].resize(image_width);
-        }
         
         // Create worker threads
         std::vector<std::thread> threads;
@@ -96,37 +85,22 @@ class camera {
                             ray r = get_ray(i, j);
                             pixel_color += ray_color(r, max_depth, world);
                         }
-                        row_buffer[j][i] = pixel_samples_scale * pixel_color;
-                    }
-                    
-                    // Mark row as completed and try to output sequential rows
-                    {
-                        std::lock_guard<std::mutex> lock(output_mutex);
-                        row_completed[j] = true;
-                        
-                        // Output all consecutive completed rows starting from next_output_row
-                        int current_output = next_output_row.load();
-                        while (current_output < image_height && row_completed[current_output]) {
-                            for (int i = 0; i < image_width; i++) {
-                                write_color(std::cout, row_buffer[current_output][i]);
-                            }
-                            next_output_row++;
-                            current_output++;
-                        }
+                        pixel_buffer[j * image_width + i] = pixel_samples_scale * pixel_color;
                     }
                     
                     // Update progress (thread-safe)
                     int current_completed = completed_lines.fetch_add(1) + 1;
                     
                     // More frequent progress updates
-                    if (current_completed % 2 == 0) {
-                        std::lock_guard<std::mutex> lock(progress_mutex);
+                    if (current_completed % 2 == 0) { // Update every 2 lines
                         double progress_percent = (current_completed * 100.0) / image_height;
                         std::clog << "\rProgress: " << std::fixed << std::setprecision(1) 
                                   << progress_percent << "% (" << current_completed << "/" 
                                   << image_height << " lines) - " << (image_height - current_completed) 
                                   << " remaining" << std::flush;
                     }
+                    
+                    
                 }
             });
         }
@@ -136,6 +110,13 @@ class camera {
             thread.join();
         }
         
+        // Output the rendered image
+        for (int j = 0; j < image_height; j++) {
+            for (int i = 0; i < image_width; i++) {
+                write_color(std::cout, pixel_buffer[j * image_width + i]);
+            }
+        }
+
         std::clog << "\rDone.                 \n";
     }
 
