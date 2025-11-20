@@ -6,11 +6,10 @@
 \geometry{margin=1in}
 \onehalfspacing
 
-\title{Proposal for Senior Capstone Project:\\
-\textbf{Mathematical Analysis of the Rendering Equation and its Monte Carlo Approximation}}
-\author{Luke Jachimiec\\
-Math 401 – Senior Capstone Proposal}
-\date{\today}
+
+\title{\textbf{Mathematical Analysis of the Rendering Equation and its Monte Carlo Approximation}}
+\author{Luke Jachimiec}
+\date{}
 
 \begin{document}
 \maketitle
@@ -31,7 +30,7 @@ L_i(x,\omega_i)\,
 d\omega_i.
 \]
 
-Topics to be introduced in this section:
+
 \begin{itemize}
     \item Radiometric quantities: radiance, irradiance, and the bidirectional reflectance distribution function (BRDF).
     \item The hemisphere $\Omega$ as a subset of the unit sphere $S^2$.
@@ -39,7 +38,6 @@ Topics to be introduced in this section:
     \item Why closed-form solutions are infeasible except in trivial cases.
 \end{itemize}
 
-This section situates the problem in mathematical context and motivates Monte Carlo integration as the primary analytical tool.
 
 \section{Project Description}
 The goal of the project is to study the rendering equation from a mathematical perspective and construct Monte Carlo estimators for simplified reflectance models.
@@ -69,12 +67,11 @@ This project will:
     \item Validate numerically through simple experiments (e.g., Lambertian surfaces with constant illumination).
 \end{itemize}
 
-No large-scale software development is included; computational components serve purely to verify mathematical properties.
 
 \section{Foundations}
-This section develops the mathematical theory underlying the project.
 
-\subsection*{Mathematical Topics to Address}
+
+\subsection*{Mathematical Topics}
 \begin{itemize}
     \item Geometry of the hemisphere as a 2-dimensional manifold embedded in $\mathbb{R}^3$.
     \item Change of variables:
@@ -117,11 +114,11 @@ This section develops the mathematical theory underlying the project.
     \]
 \end{itemize}
 
-This section will include derivations, diagrams, and analytic reasoning to demonstrate mathematical correctness.
+
 
 \section{Implementation Plan and Timeline}
 
-\subsection*{Mathematical Work (Primary Focus)}
+\subsection*{Mathematical Work}
 \textbf{Week 1–2:}
 \begin{itemize}
     \item Study radiometric definitions and formalize the rendering equation.
