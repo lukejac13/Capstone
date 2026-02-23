@@ -6,6 +6,7 @@
 #include "vec3.h"
 #include "ray.h"
 #include "sphere.h"
+#include "triangle.h"
 #include "hitable_list.h"
 #include "camera.h"
 #include "material.h"
@@ -96,41 +97,254 @@ __global__ void render(vec3 *fb, int max_x, int max_y, int ns, camera **cam, hit
 
 __global__ void create_world(hitable **d_list, hitable **d_world, camera **d_camera, int nx, int ny, curandState *rand_state) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
+        // Create a ground (two large triangles) and a grid of small triangular prisms
         curandState local_rand_state = *rand_state;
-        d_list[0] = new sphere(vec3(0,-1000.0,-1), 1000,
-                               new lambertian(vec3(0.5, 0.5, 0.5)));
-        int i = 1;
+        int i = 0;
+
+        // Ground as two large triangles (each has its own material instance)
+        d_list[i++] = new triangle(vec3(-1000.0f, -0.5f, -1000.0f), vec3(1000.0f, -0.5f, -1000.0f), vec3(1000.0f, -0.5f, 1000.0f), new lambertian(vec3(0.5f, 0.5f, 0.5f)));
+        d_list[i++] = new triangle(vec3(-1000.0f, -0.5f, -1000.0f), vec3(1000.0f, -0.5f, 1000.0f), vec3(-1000.0f, -0.5f, 1000.0f), new lambertian(vec3(0.5f, 0.5f, 0.5f)));
+
+        // Grid of small prisms/spheres replacing the old spheres
         for(int a = -11; a < 11; a++) {
             for(int b = -11; b < 11; b++) {
-                float choose_mat = RND;
-                vec3 center(a+RND,0.2,b+RND);
-                if(choose_mat < 0.8f) {
-                    d_list[i++] = new sphere(center, 0.2,
-                                             new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
-                }
-                else if(choose_mat < 0.95f) {
-                    d_list[i++] = new sphere(center, 0.2,
-                                             new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
-                }
-                else {
-                    d_list[i++] = new sphere(center, 0.2, new dielectric(1.5));
+                float shape_choice = RND; // decide prism vs sphere
+                float choose_mat = RND;   // decide material
+                vec3 center(a + RND, 0.2f, b + RND);
+                float s = 0.2f; // base size
+                float h = 0.2f; // extrusion height
+                if (shape_choice < 0.5f) {
+                    // make a small sphere instead of a prism
+                    if (choose_mat < 0.8f) {
+                        d_list[i++] = new sphere(center, s, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                    } else if (choose_mat < 0.95f) {
+                        d_list[i++] = new sphere(center, s, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                    } else {
+                        d_list[i++] = new sphere(center, s, new dielectric(1.5f));
+                    }
+                } else {
+                    // build a small triangular prism (6 triangles)
+                    vec3 p0 = center + vec3(0.0f, 0.0f, -s);
+                    vec3 p1 = center + vec3(s, 0.0f, -s);
+                    vec3 p2 = center + vec3(s*0.5f, s*0.8660254f, -s);
+                    vec3 q0 = p0 + vec3(0.0f, 0.0f, h);
+                    vec3 q1 = p1 + vec3(0.0f, 0.0f, h);
+                    vec3 q2 = p2 + vec3(0.0f, 0.0f, h);
+
+                    if (choose_mat < 0.8f) {
+                        d_list[i++] = new triangle(p0, p1, p2, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                        d_list[i++] = new triangle(q0, q2, q1, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                        d_list[i++] = new triangle(p0, p1, q1, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                        d_list[i++] = new triangle(p0, q1, q0, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                        d_list[i++] = new triangle(p1, p2, q2, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                        d_list[i++] = new triangle(p1, q2, q1, new lambertian(vec3(RND*RND, RND*RND, RND*RND)));
+                    } else if (choose_mat < 0.95f) {
+                        d_list[i++] = new triangle(p0, p1, p2, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                        d_list[i++] = new triangle(q0, q2, q1, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                        d_list[i++] = new triangle(p0, p1, q1, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                        d_list[i++] = new triangle(p0, q1, q0, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                        d_list[i++] = new triangle(p1, p2, q2, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                        d_list[i++] = new triangle(p1, q2, q1, new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND));
+                    } else {
+                        d_list[i++] = new triangle(p0, p1, p2, new dielectric(1.5f));
+                        d_list[i++] = new triangle(q0, q2, q1, new dielectric(1.5f));
+                        d_list[i++] = new triangle(p0, p1, q1, new dielectric(1.5f));
+                        d_list[i++] = new triangle(p0, q1, q0, new dielectric(1.5f));
+                        d_list[i++] = new triangle(p1, p2, q2, new dielectric(1.5f));
+                        d_list[i++] = new triangle(p1, q2, q1, new dielectric(1.5f));
+                    }
                 }
             }
         }
-        d_list[i++] = new sphere(vec3(0, 1,0),  1.0, new dielectric(1.5));
-        d_list[i++] = new sphere(vec3(-4, 1, 0), 1.0, new lambertian(vec3(0.4, 0.2, 0.1)));
-        d_list[i++] = new sphere(vec3(4, 1, 0),  1.0, new metal(vec3(0.7, 0.6, 0.5), 0.0));
-        *rand_state = local_rand_state;
-        *d_world  = new hitable_list(d_list, 22*22+1+3);
 
-        vec3 lookfrom(13,2,3);
-        vec3 lookat(0,0,0);
+        // Create three larger prisms in place of the previous big spheres
+        // Create three larger prisms with randomized Y-rotation
+        const float PI = 3.14159265358979323846f;
+
+        // Big prism 1 (dielectric-like) with random rotation
+        {
+            vec3 ctr = vec3(5,1,-2);
+            float S = 1.0f; float H = 1.0f;
+            float theta = 2.0f*PI*RND; // random rotation
+            float ct = cosf(theta), st = sinf(theta);
+            vec3 p0 = ctr + vec3(0.0f, 0.0f, -S);
+            vec3 p1 = ctr + vec3(S, 0.0f, -S);
+            vec3 p2 = ctr + vec3(S*0.5f, S*0.8660254f, -S);
+            vec3 q0 = p0 + vec3(0.0f, 0.0f, H);
+            vec3 q1 = p1 + vec3(0.0f, 0.0f, H);
+            vec3 q2 = p2 + vec3(0.0f, 0.0f, H);
+            // rotate around Y about ctr
+            {
+                vec3 r = p0 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p0 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = p1 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p1 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = p2 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p2 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q0 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q0 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q1 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q1 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q2 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q2 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            d_list[i++] = new triangle(p0, p1, p2, new dielectric(1.5f));
+            d_list[i++] = new triangle(q0, q2, q1, new dielectric(1.5f));
+            d_list[i++] = new triangle(p0, p1, q1, new dielectric(1.5f));
+            d_list[i++] = new triangle(p0, q1, q0, new dielectric(1.5f));
+            d_list[i++] = new triangle(p1, p2, q2, new dielectric(1.5f));
+            d_list[i++] = new triangle(p1, q2, q1, new dielectric(1.5f));
+        }
+
+        // Big prism 2 (lambertian) with random rotation
+        {
+            vec3 ctr = vec3(1,2,0);
+            float S = 1.0f; float H = 1.0f;
+            float theta = 2.0f*PI*RND;
+            float ct = cosf(theta), st = sinf(theta);
+            vec3 p0 = ctr + vec3(0.0f, 0.0f, -S);
+            vec3 p1 = ctr + vec3(S, 0.0f, -S);
+            vec3 p2 = ctr + vec3(S*0.5f, S*0.8660254f, -S);
+            vec3 q0 = p0 + vec3(0.0f, 0.0f, H);
+            vec3 q1 = p1 + vec3(0.0f, 0.0f, H);
+            vec3 q2 = p2 + vec3(0.0f, 0.0f, H);
+            {
+                vec3 r = p0 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p0 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = p1 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p1 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = p2 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p2 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q0 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q0 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q1 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q1 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q2 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q2 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            d_list[i++] = new triangle(p0, p1, p2, new lambertian(vec3(0.4f, 0.2f, 0.1f)));
+            d_list[i++] = new triangle(q0, q2, q1, new lambertian(vec3(0.4f, 0.2f, 0.1f)));
+            d_list[i++] = new triangle(p0, p1, q1, new lambertian(vec3(0.4f, 0.2f, 0.1f)));
+            d_list[i++] = new triangle(p0, q1, q0, new lambertian(vec3(0.4f, 0.2f, 0.1f)));
+            d_list[i++] = new triangle(p1, p2, q2, new lambertian(vec3(0.4f, 0.2f, 0.1f)));
+            d_list[i++] = new triangle(p1, q2, q1, new lambertian(vec3(0.4f, 0.2f, 0.1f)));
+        }
+
+        // Big prism 3 (metal) with random rotation
+        {
+            vec3 ctr = vec3(0,0,1);
+            float S = 1.0f; float H = 1.0f;
+            float theta = 2.0f*PI*RND;
+            float ct = cosf(theta), st = sinf(theta);
+            vec3 p0 = ctr + vec3(0.0f, 0.0f, -S);
+            vec3 p1 = ctr + vec3(S, 0.0f, -S);
+            vec3 p2 = ctr + vec3(S*0.5f, S*0.8660254f, -S);
+            vec3 q0 = p0 + vec3(0.0f, 0.0f, H);
+            vec3 q1 = p1 + vec3(0.0f, 0.0f, H);
+            vec3 q2 = p2 + vec3(0.0f, 0.0f, H);
+            {
+                vec3 r = p0 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p0 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = p1 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p1 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = p2 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                p2 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q0 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q0 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q1 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q1 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            {
+                vec3 r = q2 - ctr;
+                float rx = ct * r.x() + st * r.z();
+                float rz = -st * r.x() + ct * r.z();
+                q2 = vec3(rx + ctr.x(), r.y() + ctr.y(), rz + ctr.z());
+            }
+            d_list[i++] = new triangle(p0, p1, p2, new metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+            d_list[i++] = new triangle(q0, q2, q1, new metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+            d_list[i++] = new triangle(p0, p1, q1, new metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+            d_list[i++] = new triangle(p0, q1, q0, new metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+            d_list[i++] = new triangle(p1, p2, q2, new metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+            d_list[i++] = new triangle(p1, q2, q1, new metal(vec3(0.7f, 0.6f, 0.5f), 0.0f));
+        }
+
+        // Add two large spheres somewhere in the scene
+        d_list[i++] = new sphere(vec3(2.0f, 3.0f, -1.0f), 1.0f, new lambertian(vec3(0.2f, 0.8f, 0.3f)));
+        d_list[i++] = new sphere(vec3(2.0f, 1.0f, -1.0f), 1.0f, new metal(vec3(0.8f, 0.8f, 0.8f), 0.0f));
+
+        *rand_state = local_rand_state;
+        *d_world  = new hitable_list(d_list, i);
+
+        vec3 lookfrom(13,4,3);
+        vec3 lookat(0,1,0);
         float dist_to_focus = 10.0; (lookfrom-lookat).length();
         float aperture = 0.1;
         *d_camera   = new camera(lookfrom,
                                  lookat,
-                                 vec3(0,1,0),
-                                 30.0,
+                                 vec3(0,2,0),
+                                 20.0,
                                  float(nx)/float(ny),
                                  aperture,
                                  dist_to_focus);
@@ -138,9 +352,11 @@ __global__ void create_world(hitable **d_list, hitable **d_world, camera **d_cam
 }
 
 __global__ void free_world(hitable **d_list, hitable **d_world, camera **d_camera) {
-    for(int i=0; i < 22*22+1+3; i++) {
-        delete ((sphere *)d_list[i])->mat_ptr;
-        delete d_list[i];
+    // read the actual list size from the world and delete only those entries
+    hitable_list *world = (hitable_list *)(*d_world);
+    int n = world->list_size;
+    for(int i=0; i < n; i++) {
+        if (d_list[i]) delete d_list[i];
     }
     delete *d_world;
     delete *d_camera;
@@ -149,7 +365,7 @@ __global__ void free_world(hitable **d_list, hitable **d_world, camera **d_camer
 int main() {
     int nx = 1920;
     int ny = 1080;
-    int ns = 100;
+    int ns = 500;
     int tx = 8;
     int ty = 8;
 
@@ -174,9 +390,9 @@ int main() {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-    // make our world of hitables & the camera
+    // make our world of hitables & the camera (grid of prisms)
     hitable **d_list;
-    int num_hitables = 22*22+1+3;
+    int num_hitables = 22*22*6 + 18 + 2 + 2; // small prisms (6 triangles each) + 3 big prisms (18) + ground (2) + 2 big spheres
     checkCudaErrors(cudaMalloc((void **)&d_list, num_hitables*sizeof(hitable *)));
     hitable **d_world;
     checkCudaErrors(cudaMalloc((void **)&d_world, sizeof(hitable *)));
