@@ -105,36 +105,14 @@ __global__ void create_world(hitable **d_list, hitable **d_world, camera **d_cam
         int i = 0;
 
         if (use_mesh && mesh_vertices != nullptr && mesh_indices != nullptr && num_indices > 0) {
-            // Load triangles from mesh
+            // Mesh path: use one mesh hitable to avoid millions of device allocations
             int num_triangles = num_indices / 3;
-            printf("Creating %d triangles from mesh...\n", num_triangles);
-            
-            for (int tri = 0; tri < num_triangles; tri++) {
-                if (tri % 20000 == 0) {
-                    printf("  Allocated %d/%d triangles...\n", tri, num_triangles);
-                }
-                int idx0 = mesh_indices[tri * 3];
-                int idx1 = mesh_indices[tri * 3 + 1];
-                int idx2 = mesh_indices[tri * 3 + 2];
-                
-                vec3 v0 = mesh_vertices[idx0];
-                vec3 v1 = mesh_vertices[idx1];
-                vec3 v2 = mesh_vertices[idx2];
-                
-                // Create triangle with a default material (you can vary this)
-                float choose_mat = .5;
-                material *mat;
-                if (choose_mat < 0.7f) {
-                    mat = new lambertian(vec3(0.3f, 0.3f, 0.3f));
-                } else if (choose_mat > 0.95f) {
-                    mat = new metal(vec3(0.5f*(1.0f+RND), 0.5f*(1.0f+RND), 0.5f*(1.0f+RND)), 0.5f*RND);
-                }else{
-                    mat = new lambertian(vec3(0.5f + 0.5f*RND, 0.5f + 0.5f*RND, 0.5f + 0.5f*RND));
-                }
-                
-                d_list[i++] = new triangle(v0, v1, v2, mat);
-            }
-            printf("Successfully created all %d triangles\n", num_triangles);
+            printf("Using mesh acceleration: %d triangles in one hitable.\n", num_triangles);
+
+            material *mesh_mat = new lambertian(vec3(0.6f, 0.6f, 0.6f));
+            d_list[i++] = new mesh(mesh_vertices, mesh_indices, num_indices, mesh_mat);
+
+            printf("Mesh hitable created.\n");
         } else {
             // Original hardcoded scene
             // Ground as two large triangles (each has its own material instance)
@@ -374,7 +352,7 @@ __global__ void create_world(hitable **d_list, hitable **d_world, camera **d_cam
         *rand_state = local_rand_state;
         *d_world  = new hitable_list(d_list, i);
 
-        vec3 lookfrom(20, 20, 100);
+        vec3 lookfrom(10000, 3000, 2000);
         vec3 lookat(0, 10, 0);
         float dist_to_focus = (lookfrom-lookat).length();
         float aperture = 0.05;
@@ -487,9 +465,9 @@ int main(int argc, char** argv) {
     int num_hitables;
     
     if (use_mesh) {
-        // Allocate enough space for mesh triangles
-        num_hitables = (num_indices / 3) + 100;
-        std::cerr << "Preparing to load " << num_hitables << " hitables for mesh\n";
+        // For mesh path we use one hitable object instead of one per triangle
+        num_hitables = 2;
+        std::cerr << "Preparing to load mesh as a single hitable object\n";
     } else {
         // Original hardcoded scene
         num_hitables = 22*22*6 + 18 + 2 + 2;
