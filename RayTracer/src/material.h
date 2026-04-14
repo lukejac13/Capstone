@@ -46,15 +46,46 @@ class material  {
 
 class lambertian : public material {
     public:
-        __device__ lambertian(const vec3& a) : albedo(a) {}
+        __device__ lambertian(const vec3& a)
+            : albedo(a), tex_pixels(nullptr), nx(0), ny(0), nc(0), textured(false) {}
+        __device__ lambertian(unsigned char *pixels, int width, int height, int channels)
+            : albedo(vec3(1.0f, 1.0f, 1.0f)), tex_pixels(pixels), nx(width), ny(height), nc(channels), textured(true) {}
+
         __device__ virtual bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, curandState *local_rand_state) const  {
              vec3 target = rec.p + rec.normal + random_in_unit_sphere(local_rand_state);
              scattered = ray(rec.p, target-rec.p);
-             attenuation = albedo;
+             attenuation = textured ? texture_value(rec.u, rec.v) : albedo;
              return true;
         }
 
+        __device__ vec3 texture_value(float u, float v) const {
+            if (!textured || tex_pixels == nullptr || nx <= 0 || ny <= 0) {
+                return albedo;
+            }
+            u = u - floor(u);
+            v = v - floor(v);
+            if (u < 0.0f) u += 1.0f;
+            if (v < 0.0f) v += 1.0f;
+            v = 1.0f - v;
+            int i = static_cast<int>(u * nx);
+            int j = static_cast<int>(v * ny);
+            if (i < 0) i = 0;
+            if (j < 0) j = 0;
+            if (i >= nx) i = nx - 1;
+            if (j >= ny) j = ny - 1;
+            int pixel_index = (j * nx + i) * nc;
+            float r = tex_pixels[pixel_index] / 255.0f;
+            float g = nc > 1 ? tex_pixels[pixel_index + 1] / 255.0f : r;
+            float b = nc > 2 ? tex_pixels[pixel_index + 2] / 255.0f : r;
+            return vec3(r, g, b);
+        }
+
         vec3 albedo;
+        unsigned char *tex_pixels;
+        int nx;
+        int ny;
+        int nc;
+        bool textured;
 };
 
 class metal : public material {
