@@ -1,0 +1,9 @@
+# Ignore model files
+models/*.obj
+models/*.mtl
+models/*.png
+models/*.jpeg
+models/*.jpg
+
+# Keep the models directory visible
+!models/
