@@ -3,3 +3,8 @@ build/
 .vscode/
 *.exe
 .md
+*.obj
+*.mtl
+*.png
+*.jpeg
+*.jpg
