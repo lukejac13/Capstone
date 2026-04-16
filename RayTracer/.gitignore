@@ -6,6 +6,8 @@ models/*.jpeg
 models/*.jpg
 models/*.bmp
 models/*.tga
+*.ppm
+
 
 
 # Keep the models directory visible

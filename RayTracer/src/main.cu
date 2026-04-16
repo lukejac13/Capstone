@@ -2,6 +2,7 @@
 #include <fstream>
 #include <time.h>
 #include <float.h>
+#include <cmath>
 #include <curand_kernel.h>
 #include <string>
 #include <algorithm>
@@ -19,14 +20,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-// limited version of checkCudaErrors from helper_cuda.h in CUDA examples
+
 #define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
 
 void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
     if (result) {
         std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
             file << ":" << line << " '" << func << "' \n";
-        // Make sure we call CUDA Device Reset before exiting
+        
         cudaDeviceReset();
         exit(99);
     }
@@ -55,6 +56,25 @@ static bool is_integer(const std::string &s) {
     if (s.empty()) return false;
     for (unsigned char c : s) {
         if (!std::isdigit(c)) return false;
+    }
+    return true;
+}
+
+static bool is_number(const std::string &s) {
+    if (s.empty()) return false;
+    bool seen_decimal = false;
+    int start = 0;
+    if (s[0] == '+' || s[0] == '-') {
+        if (s.size() == 1) return false;
+        start = 1;
+    }
+    for (int i = start; i < (int)s.size(); i++) {
+        if (s[i] == '.') {
+            if (seen_decimal) return false;
+            seen_decimal = true;
+        } else if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
+            return false;
+        }
     }
     return true;
 }
@@ -108,9 +128,9 @@ static std::string find_obj_in_directory(const std::string &dir_path) {
     return found;
 }
 
-static void compute_camera_for_mesh(const Mesh &mesh, int camera_option, vec3 &lookfrom, vec3 &lookat, float &dist_to_focus) {
+static void compute_camera_for_mesh(const Mesh &mesh, int camera_option, bool use_camera_angles, float azimuth_deg, float elevation_deg, bool use_camera_radius, float camera_radius, vec3 &lookfrom, vec3 &lookat, float &dist_to_focus) {
     if (mesh.vertices.empty()) {
-        lookfrom = vec3(10000, 3000, 2000);
+        lookfrom = vec3(100, 30, 20);
         lookat = vec3(0, 10, 0);
         dist_to_focus = (lookfrom - lookat).length();
         return;
@@ -132,31 +152,36 @@ static void compute_camera_for_mesh(const Mesh &mesh, int camera_option, vec3 &l
     vec3 extents = maxp - minp;
     float radius = 0.5f * sqrt(extents.x()*extents.x() + extents.y()*extents.y() + extents.z()*extents.z());
     const float fov = 20.0f * 3.14159265358979323846f / 180.0f;
-    float distance = radius / sinf(fov * 0.5f) * 1.15f;
-    if (distance < radius * 2.0f) distance = radius * 2.0f;
+    float auto_distance = radius / sinf(fov * 0.5f) * 1.15f;
+    if (auto_distance < radius * 2.0f) auto_distance = radius * 2.0f;
+    float distance = use_camera_radius && camera_radius > 0.0f ? camera_radius : auto_distance;
 
-    const vec3 directions[8] = {
-        vec3(0.0f, 0.0f, 1.0f),
-        vec3(0.0f, 0.0f, -1.0f),
-        vec3(-1.0f, 0.0f, 0.0f),
-        vec3(1.0f, 0.0f, 0.0f),
-        vec3(-0.70710678f, 0.0f, 0.70710678f),
-        vec3(0.70710678f, 0.0f, 0.70710678f),
-        vec3(-0.70710678f, 0.0f, -0.70710678f),
-        vec3(0.70710678f, 0.0f, -0.70710678f)
-    };
-    int option = camera_option % 8;
-    if (option < 0) option = 0;
-    vec3 direction = directions[option];
-
-    lookfrom = lookat + vec3(direction.x(), 0.0f, direction.z()) * distance + vec3(0.0f, radius * 0.3f, 0.0f);
+    if (use_camera_angles) {
+        float azimuth = azimuth_deg * 3.14159265358979323846f / 180.0f;
+        float elevation = elevation_deg * 3.14159265358979323846f / 180.0f;
+        float cos_e = cosf(elevation);
+        vec3 direction = vec3(sinf(azimuth) * cos_e, sinf(elevation), cosf(azimuth) * cos_e);
+        lookfrom = lookat + direction * distance;
+    } else {
+        const vec3 directions[8] = {
+            vec3(0.0f, 0.0f, 1.0f),
+            vec3(0.0f, 0.0f, -1.0f),
+            vec3(-1.0f, 0.0f, 0.0f),
+            vec3(1.0f, 0.0f, 0.0f),
+            vec3(-0.70710678f, 0.0f, 0.70710678f),
+            vec3(0.70710678f, 0.0f, 0.70710678f),
+            vec3(-0.70710678f, 0.0f, -0.70710678f),
+            vec3(0.70710678f, 0.0f, -0.70710678f)
+        };
+        int option = camera_option % 8;
+        if (option < 0) option = 0;
+        vec3 direction = directions[option];
+        lookfrom = lookat + vec3(direction.x(), 0.0f, direction.z()) * distance + vec3(0.0f, radius * 0.3f, 0.0f);
+    }
     dist_to_focus = (lookfrom - lookat).length();
 }
 
-// Matching the C++ code would recurse enough into color() calls that
-// it was blowing up the stack, so we have to turn this into a
-// limited-depth loop instead.  Later code in the book limits to a max
-// depth of 50, so we adapt this a few chapters early on the GPU.
+
 __device__ vec3 color(const ray& r, hitable **world, curandState *local_rand_state) {
     ray cur_ray = r;
     vec3 cur_attenuation = vec3(1.0,1.0,1.0);
@@ -194,10 +219,6 @@ __global__ void render_init(int max_x, int max_y, curandState *rand_state) {
     int j = threadIdx.y + blockIdx.y * blockDim.y;
     if((i >= max_x) || (j >= max_y)) return;
     int pixel_index = j*max_x + i;
-    // Original: Each thread gets same seed, a different sequence number, no offset
-    // curand_init(1984, pixel_index, 0, &rand_state[pixel_index]);
-    // BUGFIX, see Issue#2: Each thread gets different seed, same sequence for
-    // performance improvement of about 2x!
     curand_init(1984+pixel_index, 0, 0, &rand_state[pixel_index]);
 }
 
@@ -533,6 +554,11 @@ int main(int argc, char** argv) {
     std::string obj_file;
     bool use_mesh = false;
     int camera_view = 0;
+    bool use_camera_angles = false;
+    bool use_camera_radius = false;
+    float camera_azimuth = 0.0f;
+    float camera_elevation = 0.0f;
+    float camera_radius = 0.0f;
 
     if (argc > 1) {
         obj_file = argv[1];
@@ -568,14 +594,48 @@ int main(int argc, char** argv) {
                 ns = atoi(argv[arg_index]);
                 arg_index++;
             }
-            if (arg_index < argc) {
+
+            if (!use_camera_angles && arg_index + 1 < argc && is_number(argv[arg_index]) && is_number(argv[arg_index + 1])) {
+                float candidate_azimuth = static_cast<float>(atof(argv[arg_index]));
+                float candidate_elevation = static_cast<float>(atof(argv[arg_index + 1]));
+                if (candidate_azimuth >= 0.0f && candidate_azimuth <= 360.0f &&
+                    candidate_elevation >= 0.0f && candidate_elevation <= 360.0f) {
+                    use_camera_angles = true;
+                    camera_azimuth = candidate_azimuth;
+                    camera_elevation = candidate_elevation;
+                    arg_index += 2;
+                }
+            }
+
+            if (arg_index < argc && is_number(argv[arg_index])) {
+                float candidate_radius = static_cast<float>(atof(argv[arg_index]));
+                if (candidate_radius > 0.0f) {
+                    use_camera_radius = true;
+                    camera_radius = candidate_radius;
+                    arg_index++;
+                }
+            }
+
+            if (!use_camera_angles && arg_index < argc) {
                 std::string view_arg = argv[arg_index];
                 camera_view = parse_camera_view_arg(view_arg);
+                arg_index++;
+            }
+
+            if (arg_index < argc && is_number(argv[arg_index])) {
+                float candidate_radius = static_cast<float>(atof(argv[arg_index]));
+                if (candidate_radius > 0.0f) {
+                    use_camera_radius = true;
+                    camera_radius = candidate_radius;
+                    arg_index++;
+                }
             }
         }
     } else {
         std::cerr << "No OBJ file specified. Using default scene.\n";
-        std::cerr << "Usage: raytracer.exe <path_to_obj_file> [width height samples] [camera_view]\n";
+        std::cerr << "Usage: raytracer.exe <path_to_obj_file> [width height samples] [camera_view] or [azimuth elevation] [radius]\n";
+        std::cerr << "       azimuth and elevation are degrees 0-360 for spherical camera rotation.\n";
+        std::cerr << "       radius is an optional positive distance override.\n";
     }
 
     std::cerr << "Rendering a " << nx << "x" << ny << " image with " << ns << " samples per pixel ";
@@ -698,9 +758,18 @@ int main(int argc, char** argv) {
             delete[] h_material_texture_heights;
             delete[] h_material_texture_channels;
 
-            compute_camera_for_mesh(mesh, camera_view, lookfrom, lookat, dist_to_focus);
+            compute_camera_for_mesh(mesh, camera_view, use_camera_angles, camera_azimuth, camera_elevation, use_camera_radius, camera_radius, lookfrom, lookat, dist_to_focus);
             std::cerr << "Mesh data uploaded to GPU\n";
-            std::cerr << "Camera view: " << camera_view_name(camera_view) << "\n";
+            std::cerr << "Camera setup for mesh: lookfrom=" << lookfrom << ", lookat=" << lookat << "\n";
+            if (use_camera_angles) {
+                std::cerr << "Camera angles: azimuth=" << camera_azimuth << "°, elevation=" << camera_elevation << "°\n";
+            } else {
+                std::cerr << "Camera view: " << camera_view_name(camera_view) << "\n";
+            }
+            if (use_camera_radius) {
+                std::cerr << "Camera radius override: " << camera_radius << "\n";
+                std::cerr << "Camera setup for mesh: lookfrom=" << lookfrom << ", lookat=" << lookat << "\n";
+            }
         }
     }
 

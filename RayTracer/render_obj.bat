@@ -48,7 +48,7 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo Rendering: %OBJ_PATH%
     echo.
-    main.exe "%OBJ_PATH%" %~2 %~3 %~4 %~5
+    main.exe "%OBJ_PATH%" %~2 %~3 %~4 %~5 %~6 %~7 
 ) else (
     echo Compilation failed!
     pause
