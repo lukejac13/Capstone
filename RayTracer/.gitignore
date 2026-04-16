@@ -4,6 +4,9 @@ models/*.mtl
 models/*.png
 models/*.jpeg
 models/*.jpg
+models/*.bmp
+models/*.tga
+
 
 # Keep the models directory visible
 !models/
