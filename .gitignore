@@ -9,3 +9,5 @@ build/
 *.jpeg
 *.jpg
 *.ppm
+*.tga
+*.bmp
