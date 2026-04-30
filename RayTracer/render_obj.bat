@@ -3,12 +3,16 @@ REM Script to easily render OBJ files with the ray tracer
 REM Usage: render_obj.bat path\to\model.obj
 
 if "%1"=="" (
-    echo Usage: render_obj.bat ^<path_to_obj_file_or_directory^> [width height samples] [camera_view]
+    echo ================================
+    echo Error: No input provided.
+    echo.
+    echo Usage: render_obj.bat ^<path_to_obj_file_or_directory^> [image_width  image_height  samples_per_pixel  camera_azimuth  camera_elevation  camera_distance]
     echo.
     echo Example:
-    echo   render_obj.bat models\cube.obj
-    echo   render_obj.bat models\cube_dir 1920 1080 50 front-left
-    echo   render_obj.bat C:\path\to\my_model.obj 1280 720 16 back-right
+    echo   render_obj.bat "models\cube.obj"
+    echo   render_obj.bat "models\cube_dir\" 1920 1080 50
+    echo   render_obj.bat "C:\path\to\my_model.obj" 1280 720 16 100 45 30 
+    echo ================================
     exit /b 1
 )
 
