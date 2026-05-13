@@ -120,4 +120,5 @@ render_obj.bat "models\car\" 1920 1080 50 180 30 130
 
 ## Math-402 Capstone: The Rendering Equation and Monte Carlo Integration
 
-For those interested, in `Math_capstone\` you can find my math capstone research of the rendering equation and Monte Carlo integration
+For those interested, in `Math_Capstone\` you can find my math capstone research of the rendering equation and Monte Carlo integration
+There you can find the PDF of my final paper `Capstone_paper.pdf`, as well as the latex source code in `Math_Capstone/src`
