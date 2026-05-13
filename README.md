@@ -117,3 +117,7 @@ render_obj.bat "models\car\" 1920 1080 50 180 30 130
 - `nvcc` not found: verify CUDA Toolkit installation and add it to your PATH.
 - `vcvarsall.bat` path invalid: update the hard-coded Visual Studio path in `render_obj.bat`.
 - No output image: confirm the program completed successfully and that `image.ppm` was saved in `RayTracer\src`.
+
+## Math-402 Capstone: The Rendering Equation and Monte Carlo Integration
+
+For those interested, in `Math_capstone\` you can find my math capstone research of the rendering equation and Monte Carlo integration
